@@ -50,7 +50,7 @@ button,input,select{font:inherit;color:inherit}
 .bar .sp{flex:1}
 .bar input[type=number]{width:60px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
 .deskwrap{overflow:auto;display:flex;justify-content:center}
-.pagewrap{position:relative;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.25);touch-action:none;flex:none}
+.pagewrap{position:relative;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.25);flex:none}
 .pagewrap canvas{display:block}
 .overlay{position:absolute;inset:0;overflow:hidden}
 .stamp{position:absolute;cursor:grab;user-select:none;-webkit-user-drag:none;touch-action:none;max-width:none}
@@ -98,6 +98,30 @@ dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);bord
 dialog::backdrop{background:rgba(0,0,0,.5)}
 dialog h2{font-family:var(--font-head);font-size:17px;margin:0 0 8px}
 dialog p{color:var(--muted);margin:0 0 14px}
+
+.mbar{display:none}
+@media (max-width:860px){
+  html,body{height:100%}
+  body{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;padding-block:10px 0}
+  .top{flex:none;margin-bottom:8px;gap:6px 12px}
+  .top h1{font-size:19px}
+  .docname{flex-basis:100px}
+  .top #dl{display:none}
+  .grid{display:flex;flex-direction:column;align-items:stretch;flex:1;min-height:0;gap:8px}
+  .stage{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px}
+  .bar{margin-bottom:8px}
+  .deskwrap{flex:1;min-height:0;overflow:auto;align-items:flex-start;-webkit-overflow-scrolling:touch}
+  .status{flex:none;margin-top:6px}
+  .panel{display:contents}
+  .panel .card{display:none;flex:none;max-height:44vh;max-height:44dvh;overflow:auto;border-radius:12px}
+  body.sheet-add #addcard{display:block}
+  body.sheet-adjust #inspector:not(.hidden),body.sheet-adjust #doccard{display:block}
+  body.sheet-adjust #inspector:not(.hidden) ~ #doccard{display:none}
+  .mbar{display:flex;flex:none;gap:8px;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px));background:var(--bg)}
+  .mbar .btn{flex:1;padding:12px 8px;font-size:15px}
+  .mbar .btn[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft)}
+  .mbar .btn.primary{flex:1.2}
+}
 </style>
 </head>
 <body>
@@ -140,7 +164,7 @@ dialog p{color:var(--muted);margin:0 0 14px}
       <div class="row"><button class="btn small" id="dup" type="button">Duplicate</button><button class="btn small danger" id="del" type="button">Remove</button></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="addcard">
       <h2>Add a stamp</h2>
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" id="t-text" aria-selected="true" type="button">Text</button>
@@ -175,7 +199,7 @@ dialog p{color:var(--muted);margin:0 0 14px}
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="doccard">
       <h2>On this document</h2>
       <div class="list" id="onlist"></div>
       <p class="empty" id="onempty">No stamps yet.</p>
@@ -183,6 +207,12 @@ dialog p{color:var(--muted);margin:0 0 14px}
     </div>
   </aside>
 </div>
+
+<nav class="mbar" aria-label="Stamp actions">
+  <button class="btn" id="m-add" type="button" aria-pressed="false">Add stamp</button>
+  <button class="btn" id="m-adj" type="button" aria-pressed="false">Adjust</button>
+  <button class="btn primary" id="m-dl" type="button" disabled>Save PDF</button>
+</nav>
 
 <dialog id="drivedlg" aria-labelledby="dlgt">
   <h2 id="dlgt">Keep this stamp in your Google Drive?</h2>
@@ -332,13 +362,13 @@ $("#pagewrap").addEventListener("pointerdown",function(){select(null)});
 function addStamp(c){
   if(!S.pdf){status("Open a document first.","err");return}
   var s={id:"s"+(++uid),src:c.src,ar:c.ar,x:.72,y:.84,w:c.kind==="text"?.3:.2,rot:c.kind==="text"?-6:0,op:1,mode:"page",page:S.page,range:""};
-  S.stamps.push(s);S.sel=s.id;renderOverlay();updateAll();status("Stamp placed. Drag it where you want it.","ok");
+  S.stamps.push(s);S.sel=s.id;setSheet(null);renderOverlay();updateAll();status("Stamp placed. Drag it where you want it.","ok");
 }
 function selStamp(){return S.stamps.find(function(s){return s.id===S.sel})||null}
 function select(id){
   S.sel=id;
   document.querySelectorAll(".stamp").forEach(function(e){e.classList.toggle("sel",e.dataset.id===id)});
-  renderInspector();renderList();
+  renderInspector();renderList();setTimeout(revealStamp,60);
 }
 function renderInspector(){
   var s=selStamp(),box=$("#inspector");box.classList.toggle("hidden",!s);if(!s)return;
@@ -359,7 +389,7 @@ function renderList(){
     l.appendChild(d);
   });
 }
-function updateAll(){renderInspector();renderList();$("#dl").disabled=!(S.pdf&&S.stamps.length);$("#dl").textContent=S.stamps.length>1?"Save stamped PDF ("+S.stamps.length+" stamps)":"Save stamped PDF"}
+function updateAll(){renderInspector();renderList();$("#dl").disabled=!(S.pdf&&S.stamps.length);$("#m-dl").disabled=$("#dl").disabled;$("#dl").textContent=S.stamps.length>1?"Save stamped PDF ("+S.stamps.length+" stamps)":"Save stamped PDF"}
 function bindSlider(id,fn){$(id).addEventListener("input",function(){var s=selStamp();if(!s)return;fn(s,+this.value);var el=document.querySelector('.stamp[data-id="'+s.id+'"]');if(el)place(el,s);renderInspector()})}
 bindSlider("#sw",function(s,v){s.w=v/100});bindSlider("#sr",function(s,v){s.rot=v});bindSlider("#so",function(s,v){s.op=v/100});
 $("#smode").addEventListener("change",function(){var s=selStamp();if(!s)return;s.mode=this.value;if(s.mode==="page")s.page=S.page;if(s.mode==="custom"&&!s.range)s.range=String(S.page);renderOverlay();renderInspector();renderList()});
@@ -512,6 +542,25 @@ $("#dl").addEventListener("click",async function(){
     status((e&&e.message)||"The stamped PDF could not be saved.","err");
   }finally{updateAll()}
 });
+
+
+/* ---------- phone bottom bar ---------- */
+function setSheet(name){
+  document.body.classList.toggle("sheet-add",name==="add");document.body.classList.toggle("sheet-adjust",name==="adjust");
+  $("#m-add").setAttribute("aria-pressed",String(name==="add"));$("#m-adj").setAttribute("aria-pressed",String(name==="adjust"));
+  setTimeout(revealStamp,60);
+}
+/* keep the selected stamp in view when a panel shrinks the page area (phone) */
+function revealStamp(){
+  var s=selStamp();if(!s||!curSheet())return;
+  var el=document.querySelector('.stamp[data-id="'+s.id+'"]'),dw=$("#deskwrap");if(!el)return;
+  var r=el.getBoundingClientRect(),d=dw.getBoundingClientRect();
+  if(r.top<d.top+8||r.bottom>d.bottom-8)dw.scrollTop+=(r.top+r.height/2)-(d.top+d.height/2);
+}
+function curSheet(){return document.body.classList.contains("sheet-add")?"add":document.body.classList.contains("sheet-adjust")?"adjust":null}
+$("#m-add").addEventListener("click",function(){setSheet(curSheet()==="add"?null:"add")});
+$("#m-adj").addEventListener("click",function(){setSheet(curSheet()==="adjust"?null:"adjust")});
+$("#m-dl").addEventListener("click",function(){$("#dl").click()});
 
 /* ---------- wiring ---------- */
 $("#openbtn").addEventListener("click",function(){$("#filein").click()});
