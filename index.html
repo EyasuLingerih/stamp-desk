@@ -97,6 +97,7 @@ button,input,select{font:inherit;color:inherit}
 .swatches{display:flex;gap:8px}
 .sw{width:26px;height:26px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
 .sw[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent)}
+.sw.orig{background:conic-gradient(#b3261e,#e0a020,#1f7a4d,#1f3a93,#b3261e)}
 .preview{display:flex;align-items:center;justify-content:center;min-height:90px;background:repeating-conic-gradient(var(--bg) 0 25%,var(--panel) 0 50%) 0 0/16px 16px;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:10px}
 .preview img{max-width:100%;max-height:110px}
 .check{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -178,6 +179,8 @@ dialog p{color:var(--muted);margin:0 0 14px}
       <div class="slider"><label class="lbl" for="sw">Size</label><input type="range" id="sw" min="5" max="80" step="1"><output id="swo"></output></div>
       <div class="slider"><label class="lbl" for="sr">Rotate</label><input type="range" id="sr" min="-180" max="180" step="1"><output id="sro"></output></div>
       <div class="slider"><label class="lbl" for="so">Opacity</label><input type="range" id="so" min="25" max="100" step="5"><output id="soo"></output></div>
+      <div class="field"><span class="lbl">Ink colour</span><div class="swatches" id="isw"></div></div>
+      <div class="check"><input type="checkbox" id="iworn"><label for="iworn">Worn ink look</label></div>
       <div class="field"><label for="smode">Put it on</label>
         <select id="smode">
           <option value="page">This page only</option><option value="all">Every page</option>
@@ -253,7 +256,7 @@ dialog p{color:var(--muted);margin:0 0 14px}
 (function(){
 "use strict";
 var $=function(s){return document.querySelector(s)};
-var S={bytes:null,name:"",pdf:null,pages:0,page:1,stamps:[],sel:null,token:0,sample:false,lib:[],cand:null,imgSrc:null,color:"#1f3a93",candText:null,candImg:null};
+var S={seed:1+Math.floor(Math.random()*1e6),bytes:null,name:"",pdf:null,pages:0,page:1,stamps:[],sel:null,token:0,sample:false,lib:[],cand:null,imgSrc:null,color:"#1f3a93",candText:null,candImg:null};
 var COLORS=["#1f3a93","#b3261e","#1f7a4d","#1a1a1a"];
 var PRESETS=[["APPROVED","#1f7a4d"],["PAID","#1f3a93"],["RECEIVED","#1f3a93"],["REJECTED","#b3261e"],["COPY","#1a1a1a"],["CONFIDENTIAL","#b3261e"],["VERIFIED","#1f7a4d"]];
 var uid=0;
@@ -264,6 +267,13 @@ function store(get,val){try{if(get)return JSON.parse(localStorage.getItem("stamp
 function dataToBytes(u){var b=atob(u.split(",")[1]);var a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
 
 /* ---------- stamp images ---------- */
+function rng(seed){var a=(seed>>>0)||1;return function(){a=(Math.imul(a,1664525)+1013904223)>>>0;return a/4294967296}}
+function wearCanvas(x,W,H,seed){
+  var r=rng(seed);x.save();x.globalCompositeOperation="destination-out";
+  for(var i=0;i<900;i++){x.globalAlpha=r()*.7;x.beginPath();x.arc(r()*W,r()*H,r()*2.2+.5,0,7);x.fill()}
+  for(var j=0;j<14;j++){x.globalAlpha=.5;x.lineWidth=1+r()*2;x.beginPath();var sx=r()*W,sy=r()*H;x.moveTo(sx,sy);x.lineTo(sx+(r()-.5)*90,sy+(r()-.5)*30);x.stroke()}
+  x.restore();
+}
 function makeTextStamp(o){
   var c=document.createElement("canvas"),x=c.getContext("2d");
   var big="bold 84px Helvetica, Arial, sans-serif",small="bold 34px Helvetica, Arial, sans-serif";
@@ -277,10 +287,21 @@ function makeTextStamp(o){
   x.lineWidth=3;rr(bw+8,bw+8,W-2*bw-16,H-2*bw-16,10);x.stroke();
   x.font=big;x.fillText(o.text||"",W/2,bw+pad+72);
   x.font=small;lines.forEach(function(l,i){x.fillText(l,W/2,bw+pad+72+46*(i+1)-4)});
-  if(o.worn){x.globalCompositeOperation="destination-out";
-    for(var i=0;i<900;i++){x.globalAlpha=Math.random()*.7;x.beginPath();x.arc(Math.random()*W,Math.random()*H,Math.random()*2.2+.5,0,7);x.fill()}
-    for(var j=0;j<14;j++){x.globalAlpha=.5;x.lineWidth=1+Math.random()*2;x.beginPath();var sx=Math.random()*W,sy=Math.random()*H;x.moveTo(sx,sy);x.lineTo(sx+(Math.random()-.5)*90,sy+(Math.random()-.5)*30);x.stroke()}}
-  return {src:c.toDataURL("image/png"),ar:W/H,kind:"text"};
+  if(o.worn)wearCanvas(x,W,H,o.seed||1);
+  return {src:c.toDataURL("image/png"),ar:W/H,kind:"text",opts:Object.assign({},o)};
+}
+/* seals and signatures: recolour (ink colour) and wear, always starting from the saved original */
+var imgCache={};
+function loadImg(src){return imgCache[src]||(imgCache[src]=new Promise(function(res,rej){var i=new Image();i.onload=function(){res(i)};i.onerror=rej;i.src=src}))}
+function hexRgb(h){var n=parseInt(h.slice(1),16);return[n>>16&255,n>>8&255,n&255]}
+async function renderImageStamp(s){
+  var img=await loadImg(s.orig),w=img.naturalWidth,h=img.naturalHeight,c=document.createElement("canvas");c.width=w;c.height=h;
+  var x=c.getContext("2d");x.drawImage(img,0,0);
+  if(s.ink){var d=x.getImageData(0,0,w,h),p=d.data,rgb=hexRgb(s.ink);
+    for(var i=0;i<p.length;i+=4){var lum=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=rgb[0];p[i+1]=rgb[1];p[i+2]=rgb[2];p[i+3]=Math.round(p[i+3]*Math.min(1,(255-lum)/200))}
+    x.putImageData(d,0,0)}
+  if(s.worn)wearCanvas(x,w,h,s.seed);
+  return {src:c.toDataURL("image/png"),ar:w/h};
 }
 function imageToCandidate(img,clean){
   var max=700,sc=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
@@ -451,7 +472,10 @@ $("#pagewrap").addEventListener("pointerdown",function(){select(null)});
 /* ---------- stamps ---------- */
 function addStamp(c){
   if(!S.pdf){status("Open a document first.","err");return}
-  var s={id:"s"+(++uid),src:c.src,ar:c.ar,x:.72,y:.84,w:c.kind==="text"?.3:.2,rot:c.kind==="text"?-6:0,op:1,mode:"page",page:S.page,range:""};
+  var isText=c.kind==="text"&&!!c.opts,seed=(c.opts&&c.opts.seed)||(1+Math.floor(Math.random()*1e6));
+  var s={id:"s"+(++uid),src:c.src,ar:c.ar,x:.72,y:.84,w:c.kind==="text"?.3:.2,rot:c.kind==="text"?-6:0,op:1,mode:"page",page:S.page,range:"",
+    kind:isText?"text":"image",opts:isText?Object.assign({},c.opts):null,orig:isText?null:(c.orig||c.src),
+    ink:isText?c.opts.color:null,worn:isText?!!c.opts.worn:false,seed:seed};
   S.stamps.push(s);S.sel=s.id;setSheet(null);renderOverlay();updateAll();status("Stamp placed. Drag it where you want it.","ok");
 }
 function selStamp(){return S.stamps.find(function(s){return s.id===S.sel})||null}
@@ -460,12 +484,38 @@ function select(id){
   document.querySelectorAll(".stamp").forEach(function(e){e.classList.toggle("sel",e.dataset.id===id)});
   renderInspector();renderList();updatePill();setTimeout(revealStamp,60);
 }
+
+/* ---------- restyle the selected stamp (ink colour, worn ink) ---------- */
+async function restyle(s){
+  var t=(s._t||0)+1;s._t=t;var r;
+  try{
+    if(s.kind==="text"&&s.opts){s.opts.color=s.ink;s.opts.worn=s.worn;s.opts.seed=s.seed;r=makeTextStamp(s.opts)}
+    else r=await renderImageStamp(s);
+  }catch(e){status("That stamp could not be recoloured.","err");return}
+  if(s._t!==t)return;
+  s.src=r.src;s.ar=r.ar;var el=elFor(s);if(el){el.firstElementChild.src=s.src;place(el,s)}
+  renderList();updatePill();
+}
+var isw=$("#isw");
+var INK_CHOICES=[null].concat(COLORS);
+INK_CHOICES.forEach(function(c,i){
+  var b=document.createElement("button");b.type="button";b.className="sw"+(c?"":" orig");b.dataset.ink=c||"";
+  if(c)b.style.background=c;b.setAttribute("aria-label",c?"Ink colour "+i:"Original colours");b.title=c?"":"Original colours";
+  b.addEventListener("click",function(){var s=selStamp();if(!s)return;s.ink=c;syncInk(s);restyle(s)});isw.appendChild(b);
+});
+function syncInk(s){
+  isw.querySelectorAll(".sw").forEach(function(b){
+    var isOrig=!b.dataset.ink;b.classList.toggle("hidden",isOrig&&s.kind==="text");
+    b.setAttribute("aria-pressed",String((b.dataset.ink||null)===(s.ink||null)))});
+  $("#iworn").checked=!!s.worn;
+}
+$("#iworn").addEventListener("change",function(){var s=selStamp();if(!s)return;s.worn=this.checked;restyle(s)});
 function renderInspector(){
   var s=selStamp(),box=$("#inspector");box.classList.toggle("hidden",!s);if(!s)return;
   $("#sw").value=Math.round(s.w*100);$("#swo").textContent=Math.round(s.w*100)+"%";
   $("#sr").value=s.rot;$("#sro").textContent=s.rot+"°";
   $("#so").value=Math.round(s.op*100);$("#soo").textContent=Math.round(s.op*100)+"%";
-  $("#smode").value=s.mode;$("#rangefield").classList.toggle("hidden",s.mode!=="custom");$("#srange").value=s.range;
+  syncInk(s);$("#smode").value=s.mode;$("#rangefield").classList.toggle("hidden",s.mode!=="custom");$("#srange").value=s.range;
 }
 function modeLabel(s){return s.mode==="page"?"Page "+s.page:s.mode==="all"?"Every page":s.mode==="first"?"First page":s.mode==="last"?"Last page":"Pages "+(s.range||"?")}
 function renderList(){
@@ -495,7 +545,7 @@ document.addEventListener("keydown",function(e){
 });
 
 /* ---------- text builder ---------- */
-function textOpts(){return{text:$("#ttext").value.trim(),sub:$("#tsub").value.trim(),date:$("#tdate").checked?$("#tdatev").value.trim():"",color:S.color,worn:$("#tworn").checked}}
+function textOpts(){return{text:$("#ttext").value.trim(),sub:$("#tsub").value.trim(),date:$("#tdate").checked?$("#tdatev").value.trim():"",color:S.color,worn:$("#tworn").checked,seed:S.seed}}
 function refreshText(){S.candText=makeTextStamp(textOpts());$("#tprev").src=S.candText.src}
 var sws=$("#swatches");COLORS.forEach(function(c,i){var b=document.createElement("button");b.type="button";b.className="sw";b.style.background=c;b.setAttribute("aria-label","Ink colour "+(i+1));b.setAttribute("aria-pressed",String(c===S.color));
   b.addEventListener("click",function(){S.color=c;sws.querySelectorAll(".sw").forEach(function(o){o.setAttribute("aria-pressed","false")});b.setAttribute("aria-pressed","true");refreshText()});sws.appendChild(b)});
@@ -569,7 +619,7 @@ function driveUi(){
   b.textContent=D.on?"Disconnect Google Drive":"Connect Google Drive";
 }
 async function saveToLib(c){
-  var item={id:"l"+Date.now(),src:c.src,ar:c.ar,kind:c.kind};
+  var item={id:"l"+Date.now(),src:c.src,ar:c.ar,kind:c.kind};if(c.opts)item.opts=c.opts;if(c.kind!=="text")item.orig=c.orig||c.src;
   if(!D.on&&cfgId()&&!D.declined){D.pending=item;$("#drivedlg").showModal();return}
   await commitLib(item);
 }
