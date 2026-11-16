@@ -31,7 +31,7 @@ The app uses the narrow `drive.file` permission: it can only see the one file it
    or click **Publish app** to let anyone with a Google account connect.
 4. Credentials > Create credentials > **OAuth client ID** > type **Web application**.
    Under **Authorised JavaScript origins** add your site address exactly, for example
-   `https://stamp-desk.vercel.app` (and `http://localhost:8000` to test locally). No redirect URI is needed.
+   `https://eyasulingerih.github.io` (GitHub Pages, no path) or your own domain, and `http://localhost:8000` to test locally. No redirect URI is needed.
 5. Copy the client ID (ends in `.apps.googleusercontent.com`) into `config.js`, then redeploy.
 
 ## Notes
