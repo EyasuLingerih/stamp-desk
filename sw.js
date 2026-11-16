@@ -1,5 +1,5 @@
 /* Stamp Desk service worker: makes the app open offline after the first visit. */
-const VERSION = "stampdesk-v2";
+const VERSION = "stampdesk-v3";
 const CORE = ["./", "index.html", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 const CDN = [
