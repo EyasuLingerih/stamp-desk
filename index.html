@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Stamp Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: a grey desk with the document in the middle, tools in a side panel; stacks on a phone. */
+:root{
+  --bg:#f3f4f8; --panel:#ffffff; --fg:#1a1e2d; --muted:#5b6279; --line:#dde0ea;
+  --accent:#2d49b0; --accent-fg:#ffffff; --accent-soft:#e8ecfa; --desk:#d6d9e3;
+  --danger:#b3261e; --ok:#1f7a4d;
+  --font-body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-head:"Space Grotesk","Inter",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11131a; --panel:#1a1d28; --fg:#e8eaf3; --muted:#9aa1b8; --line:#2a2f42;
+    --accent:#8aa0f2; --accent-fg:#0f1530; --accent-soft:#252c4d; --desk:#0c0e14;
+    --danger:#ff8a80; --ok:#6fd1a0; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11131a; --panel:#1a1d28; --fg:#e8eaf3; --muted:#9aa1b8; --line:#2a2f42;
+  --accent:#8aa0f2; --accent-fg:#0f1530; --accent-soft:#252c4d; --desk:#0c0e14;
+  --danger:#ff8a80; --ok:#6fd1a0; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5;
+  padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:16px 32px}
+button,input,select{font:inherit;color:inherit}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;margin-bottom:16px}
+.top h1{font-family:var(--font-head);font-size:22px;letter-spacing:-.01em;margin:0;font-weight:700}
+.docname{flex:1 1 200px;min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.docname b{color:var(--fg);font-weight:600}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible,.chip:focus-visible,.tab:focus-visible,.thumb:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn.danger{color:var(--danger)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.stage{background:var(--desk);border-radius:12px;padding:12px;min-width:0}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;color:var(--muted)}
+.bar .sp{flex:1}
+.bar input[type=number]{width:60px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.deskwrap{overflow:auto;display:flex;justify-content:center}
+.pagewrap{position:relative;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.25);touch-action:none;flex:none}
+.pagewrap canvas{display:block}
+.overlay{position:absolute;inset:0;overflow:hidden}
+.stamp{position:absolute;cursor:grab;user-select:none;-webkit-user-drag:none;touch-action:none;max-width:none}
+.stamp.sel{outline:2px dashed var(--accent);outline-offset:3px}
+.stamp:active{cursor:grabbing}
+.drop{border:2px dashed transparent;border-radius:10px}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.status{min-height:20px;margin-top:10px;font-size:13px;color:var(--muted)}
+.status.err{color:var(--danger)} .status.ok{color:var(--ok)}
+.panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.card h2{font-family:var(--font-head);font-size:15px;margin:0 0 10px;font-weight:700}
+.tabs{display:flex;gap:4px;margin-bottom:12px;background:var(--bg);padding:3px;border-radius:9px}
+.tab{flex:1;border:0;background:transparent;padding:6px 8px;border-radius:7px;cursor:pointer;font-weight:500;color:var(--muted)}
+.tab[aria-selected=true]{background:var(--panel);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.field label,.lbl{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.field input[type=text],.field input[type=file],.field select,.field input[type=date]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:500}
+.chip:hover{border-color:var(--accent)}
+.swatches{display:flex;gap:8px}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+.sw[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent)}
+.preview{display:flex;align-items:center;justify-content:center;min-height:90px;background:repeating-conic-gradient(var(--bg) 0 25%,var(--panel) 0 50%) 0 0/16px 16px;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:10px}
+.preview img{max-width:100%;max-height:110px}
+.check{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px}
+.thumb{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px;cursor:pointer;height:72px;display:flex;align-items:center;justify-content:center}
+.thumb img{max-width:100%;max-height:100%}
+.thumb .x{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--panel);cursor:pointer;line-height:1;font-size:12px;padding:0}
+.empty{color:var(--muted);font-size:13px}
+.slider{display:grid;grid-template-columns:76px 1fr 42px;gap:8px;align-items:center;margin-bottom:8px}
+.slider output{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.list{display:flex;flex-direction:column;gap:6px}
+.item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer;background:var(--bg)}
+.item.sel{border-color:var(--accent);background:var(--accent-soft)}
+.item img{height:26px;max-width:56px;object-fit:contain}
+.item span{flex:1;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note{font-size:12px;color:var(--muted);margin:8px 0 0}
+.hidden{display:none!important}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:12px;max-width:min(440px,calc(100vw - 32px));padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h2{font-family:var(--font-head);font-size:17px;margin:0 0 8px}
+dialog p{color:var(--muted);margin:0 0 14px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Stamp Desk</h1>
+  <div class="docname" id="docname"></div>
+  <button class="btn" id="openbtn" type="button">Open document</button>
+  <input type="file" id="filein" accept="application/pdf,image/*,.pdf" hidden>
+  <button class="btn primary" id="dl" type="button" disabled>Save stamped PDF</button>
+</header>
+
+<div class="grid">
+  <section class="stage drop" id="stage" aria-label="Document">
+    <div class="bar">
+      <button class="btn small" id="prev" type="button" aria-label="Previous page">&larr;</button>
+      <span>Page <input type="number" id="pageno" min="1" value="1" aria-label="Page number"> of <span id="pagecount">1</span></span>
+      <button class="btn small" id="next" type="button" aria-label="Next page">&rarr;</button>
+      <span class="sp"></span>
+      <span id="hint">Drag a stamp to move it</span>
+    </div>
+    <div class="deskwrap" id="deskwrap">
+      <div class="pagewrap" id="pagewrap"><canvas id="canvas"></canvas><div class="overlay" id="overlay"></div></div>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <aside class="panel">
+    <div class="card hidden" id="inspector">
+      <h2>Selected stamp</h2>
+      <div class="slider"><label class="lbl" for="sw">Size</label><input type="range" id="sw" min="5" max="80" step="1"><output id="swo"></output></div>
+      <div class="slider"><label class="lbl" for="sr">Rotate</label><input type="range" id="sr" min="-45" max="45" step="1"><output id="sro"></output></div>
+      <div class="slider"><label class="lbl" for="so">Opacity</label><input type="range" id="so" min="25" max="100" step="5"><output id="soo"></output></div>
+      <div class="field"><label for="smode">Put it on</label>
+        <select id="smode">
+          <option value="page">This page only</option><option value="all">Every page</option>
+          <option value="first">First page</option><option value="last">Last page</option><option value="custom">Chosen pages</option>
+        </select></div>
+      <div class="field hidden" id="rangefield"><label for="srange">Pages (for example 1, 3-5)</label><input type="text" id="srange" placeholder="1, 3-5"></div>
+      <div class="row"><button class="btn small" id="dup" type="button">Duplicate</button><button class="btn small danger" id="del" type="button">Remove</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Add a stamp</h2>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="t-text" aria-selected="true" type="button">Text</button>
+        <button class="tab" role="tab" id="t-img" aria-selected="false" type="button">Seal or signature</button>
+        <button class="tab" role="tab" id="t-lib" aria-selected="false" type="button">Saved</button>
+      </div>
+
+      <div id="p-text">
+        <div class="chips" id="presets"></div>
+        <div class="field"><label for="ttext">Stamp text</label><input type="text" id="ttext" maxlength="24" value="APPROVED"></div>
+        <div class="field"><label for="tsub">Second line (optional)</label><input type="text" id="tsub" maxlength="34" placeholder="For example INV-2026-0142"></div>
+        <div class="check"><input type="checkbox" id="tdate" checked><label for="tdate">Add the date</label><input type="text" id="tdatev" style="width:110px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)" aria-label="Date text"></div>
+        <div class="check"><input type="checkbox" id="tworn"><label for="tworn">Worn ink look</label></div>
+        <div class="field"><span class="lbl">Ink colour</span><div class="swatches" id="swatches"></div></div>
+        <div class="preview"><img id="tprev" alt="Stamp preview"></div>
+        <div class="row"><button class="btn primary" id="tplace" type="button">Place on page</button><button class="btn" id="tsave" type="button">Save to library</button></div>
+      </div>
+
+      <div id="p-img" class="hidden">
+        <div class="field"><label for="imgin">Photo or scan of a seal or signature</label><input type="file" id="imgin" accept="image/*"></div>
+        <div class="check"><input type="checkbox" id="iclean" checked><label for="iclean">Remove the white background</label></div>
+        <div class="preview"><img id="iprev" alt="Seal preview" class="hidden"><span class="empty" id="iempty">Choose an image to preview it here.</span></div>
+        <div class="row"><button class="btn primary" id="iplace" type="button" disabled>Place on page</button><button class="btn" id="isave" type="button" disabled>Save to library</button></div>
+        <p class="note">Use a PNG with a transparent background for the cleanest result. Photos work too.</p>
+      </div>
+
+      <div id="p-lib" class="hidden">
+        <div class="libgrid" id="libgrid"></div>
+        <p class="empty" id="libempty">Nothing saved yet. Make a stamp and choose Save to library.</p>
+        <p class="note" id="driveline"></p>
+        <button class="btn small" id="driveconnect" type="button">Connect Google Drive</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>On this document</h2>
+      <div class="list" id="onlist"></div>
+      <p class="empty" id="onempty">No stamps yet.</p>
+      <p class="note">Your files never leave this computer. Everything runs in the browser.</p>
+    </div>
+  </aside>
+</div>
+
+<dialog id="drivedlg" aria-labelledby="dlgt">
+  <h2 id="dlgt">Keep this stamp in your Google Drive?</h2>
+  <p>Saved stamps can live in your own Google Drive, so they follow you to any computer. Stamp Desk can only see the one file it creates, never your other files.</p>
+  <div class="row"><button class="btn primary" id="drive-yes" type="button">Connect Google Drive</button><button class="btn" id="drive-no" type="button">Keep on this device only</button><button class="btn" id="drive-cancel" type="button">Cancel</button></div>
+</dialog>
+
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var S={bytes:null,name:"",pdf:null,pages:0,page:1,stamps:[],sel:null,token:0,sample:false,lib:[],cand:null,imgSrc:null,color:"#1f3a93",candText:null,candImg:null};
+var COLORS=["#1f3a93","#b3261e","#1f7a4d","#1a1a1a"];
+var PRESETS=[["APPROVED","#1f7a4d"],["PAID","#1f3a93"],["RECEIVED","#1f3a93"],["REJECTED","#b3261e"],["COPY","#1a1a1a"],["CONFIDENTIAL","#b3261e"],["VERIFIED","#1f7a4d"]];
+var uid=0;
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function todayStr(){var d=new Date();function p(n){return String(n).padStart(2,"0")}return p(d.getDate())+"-"+p(d.getMonth()+1)+"-"+d.getFullYear()}
+function status(msg,kind){var e=$("#status");e.textContent=msg||"";e.className="status"+(kind?" "+kind:"")}
+function store(get,val){try{if(get)return JSON.parse(localStorage.getItem("stampdesk-lib")||"[]");localStorage.setItem("stampdesk-lib",JSON.stringify(val));return true}catch(e){return get?[]:false}}
+function dataToBytes(u){var b=atob(u.split(",")[1]);var a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a}
+
+/* ---------- stamp images ---------- */
+function makeTextStamp(o){
+  var c=document.createElement("canvas"),x=c.getContext("2d");
+  var big="bold 84px Helvetica, Arial, sans-serif",small="bold 34px Helvetica, Arial, sans-serif";
+  var lines=[];if(o.sub)lines.push(o.sub);if(o.date)lines.push(o.date);
+  x.font=big;var w=x.measureText(o.text||" ").width;
+  x.font=small;lines.forEach(function(l){w=Math.max(w,x.measureText(l).width)});
+  var pad=30,bw=8,W=Math.ceil(w+pad*2+bw*2+16),H=Math.ceil(84+lines.length*46+pad*2+bw*2);
+  c.width=W;c.height=H;x.globalAlpha=.95;x.strokeStyle=o.color;x.fillStyle=o.color;x.textAlign="center";x.textBaseline="alphabetic";
+  function rr(px,py,pw,ph,r){x.beginPath();x.moveTo(px+r,py);x.arcTo(px+pw,py,px+pw,py+ph,r);x.arcTo(px+pw,py+ph,px,py+ph,r);x.arcTo(px,py+ph,px,py,r);x.arcTo(px,py,px+pw,py,r);x.closePath()}
+  x.lineWidth=bw;rr(bw/2,bw/2,W-bw,H-bw,18);x.stroke();
+  x.lineWidth=3;rr(bw+8,bw+8,W-2*bw-16,H-2*bw-16,10);x.stroke();
+  x.font=big;x.fillText(o.text||"",W/2,bw+pad+72);
+  x.font=small;lines.forEach(function(l,i){x.fillText(l,W/2,bw+pad+72+46*(i+1)-4)});
+  if(o.worn){x.globalCompositeOperation="destination-out";
+    for(var i=0;i<900;i++){x.globalAlpha=Math.random()*.7;x.beginPath();x.arc(Math.random()*W,Math.random()*H,Math.random()*2.2+.5,0,7);x.fill()}
+    for(var j=0;j<14;j++){x.globalAlpha=.5;x.lineWidth=1+Math.random()*2;x.beginPath();var sx=Math.random()*W,sy=Math.random()*H;x.moveTo(sx,sy);x.lineTo(sx+(Math.random()-.5)*90,sy+(Math.random()-.5)*30);x.stroke()}}
+  return {src:c.toDataURL("image/png"),ar:W/H,kind:"text"};
+}
+function imageToCandidate(img,clean){
+  var max=700,sc=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  var w=Math.max(1,Math.round(img.naturalWidth*sc)),h=Math.max(1,Math.round(img.naturalHeight*sc));
+  var c=document.createElement("canvas");c.width=w;c.height=h;var x=c.getContext("2d");x.drawImage(img,0,0,w,h);
+  if(clean){var d=x.getImageData(0,0,w,h),p=d.data;
+    for(var i=0;i<p.length;i+=4){var lum=(p[i]*299+p[i+1]*587+p[i+2]*114)/1000;var a=lum>=240?0:lum<=190?255:Math.round(255*(240-lum)/50);if(a<p[i+3])p[i+3]=a}
+    x.putImageData(d,0,0)}
+  return {src:c.toDataURL("image/png"),ar:w/h,kind:"image"};
+}
+
+/* ---------- document loading ---------- */
+async function makeSample(){
+  var L=PDFLib,doc=await L.PDFDocument.create(),f=await doc.embedFont(L.StandardFonts.Helvetica),fb=await doc.embedFont(L.StandardFonts.HelveticaBold);
+  var ink=L.rgb(.1,.12,.2),mute=L.rgb(.4,.43,.5);
+  var p=doc.addPage([595,842]);
+  p.drawText("DELIVERY NOTE",{x:48,y:772,size:11,font:fb,color:mute});
+  p.drawText("DN-2026-0142",{x:48,y:740,size:26,font:fb,color:ink});
+  p.drawText("Sample document. Open your own file to replace it.",{x:48,y:716,size:10,font:f,color:mute});
+  var rows=[["Item","Qty","Unit","Amount (ETB)"],["Cement, 50 kg bag","400","bag","380,000"],["Rebar 12 mm, 12 m","250","pc","412,500"],["Roofing sheet, 0.4 mm","180","pc","144,000"],["Transport, Djibouti to Addis","1","trip","96,000"]];
+  rows.forEach(function(r,i){var y=670-i*28;var fnt=i===0?fb:f;
+    p.drawText(r[0],{x:48,y:y,size:11,font:fnt,color:ink});p.drawText(r[1],{x:330,y:y,size:11,font:fnt,color:ink});p.drawText(r[2],{x:380,y:y,size:11,font:fnt,color:ink});p.drawText(r[3],{x:450,y:y,size:11,font:fnt,color:ink});
+    p.drawLine({start:{x:48,y:y-8},end:{x:547,y:y-8},thickness:.5,color:L.rgb(.8,.82,.88)})});
+  p.drawText("Total",{x:380,y:520,size:12,font:fb,color:ink});p.drawText("1,032,500",{x:450,y:520,size:12,font:fb,color:ink});
+  p.drawText("Received by: ____________________",{x:48,y:150,size:11,font:f,color:ink});
+  p.drawText("Date: ____________",{x:380,y:150,size:11,font:f,color:ink});
+  var p2=doc.addPage([595,842]);
+  p2.drawText("Terms of delivery",{x:48,y:772,size:18,font:fb,color:ink});
+  ["Goods remain the property of the supplier until paid in full.","Claims for shortage or damage must be made within 48 hours.","This note must be stamped and signed by the receiving party."].forEach(function(t,i){p2.drawText(t,{x:48,y:730-i*22,size:11,font:f,color:ink})});
+  return doc.save();
+}
+async function imageFileToPdf(file){
+  var url=URL.createObjectURL(file);
+  var img=await new Promise(function(res,rej){var i=new Image();i.onload=function(){res(i)};i.onerror=function(){rej(new Error("That image could not be read."))};i.src=url});
+  var sc=Math.min(1,2400/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement("canvas");
+  c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);var x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+  var jpg=dataToBytes(c.toDataURL("image/jpeg",.9)),doc=await PDFLib.PDFDocument.create(),im=await doc.embedJpg(jpg);
+  var w=595,h=w*c.height/c.width,pg=doc.addPage([w,h]);pg.drawImage(im,{x:0,y:0,width:w,height:h});
+  return doc.save();
+}
+async function openBytes(bytes,name,isSample){
+  status("Opening...");
+  var task=pdfjsLib.getDocument({data:bytes.slice(),isEvalSupported:false});
+  var pdf;
+  try{pdf=await task.promise}catch(e){
+    status(e&&e.name==="PasswordException"?"This PDF is password protected. Remove the password first.":"That file could not be opened as a PDF.","err");return}
+  S.bytes=bytes;S.name=name;S.pdf=pdf;S.pages=pdf.numPages;S.page=1;
+  if(S.sample&&!isSample){S.stamps=[];S.sel=null}
+  S.sample=!!isSample;
+  $("#docname").innerHTML="<b></b>"+(isSample?" (sample)":"")+" &middot; "+S.pages+(S.pages===1?" page":" pages");
+  $("#docname b").textContent=name;
+  $("#pageno").max=S.pages;$("#pagecount").textContent=S.pages;
+  status("");await renderPage();updateAll();
+}
+async function loadFile(file){
+  if(!file)return;
+  try{
+    var isPdf=file.type==="application/pdf"||/\.pdf$/i.test(file.name);
+    var bytes=isPdf?new Uint8Array(await file.arrayBuffer()):await imageFileToPdf(file);
+    await openBytes(bytes,file.name,false);
+  }catch(e){status(e.message||"That file could not be opened.","err")}
+}
+
+/* ---------- page view ---------- */
+async function renderPage(){
+  if(!S.pdf)return;
+  var tk=++S.token,page=await S.pdf.getPage(S.page),v1=page.getViewport({scale:1});
+  var avail=Math.max(200,Math.min($("#deskwrap").clientWidth||600,900)),sc=avail/v1.width,dpr=Math.min(window.devicePixelRatio||1,2);
+  var vp=page.getViewport({scale:sc*dpr}),cv=$("#canvas");
+  cv.width=Math.floor(vp.width);cv.height=Math.floor(vp.height);cv.style.width=avail+"px";cv.style.height=(avail*v1.height/v1.width)+"px";
+  $("#pagewrap").style.width=avail+"px";
+  await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+  if(tk!==S.token)return;
+  $("#pageno").value=S.page;renderOverlay();
+}
+function applies(s,n,total){
+  switch(s.mode){case"all":return true;case"first":return n===1;case"last":return n===total;
+    case"custom":return parseRange(s.range,total).has(n);default:return s.page===n}
+}
+function parseRange(t,total){var set=new Set();String(t||"").split(",").forEach(function(part){
+  var m=part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);if(!m)return;var a=+m[1],b=m[2]?+m[2]:a;
+  for(var i=Math.min(a,b);i<=Math.max(a,b);i++)if(i>=1&&i<=total)set.add(i)});return set}
+function place(el,s){el.style.left=s.x*100+"%";el.style.top=s.y*100+"%";el.style.width=s.w*100+"%";el.style.opacity=s.op;el.style.transform="translate(-50%,-50%) rotate("+s.rot+"deg)"}
+function renderOverlay(){
+  var ov=$("#overlay");ov.innerHTML="";
+  S.stamps.forEach(function(s){
+    if(!applies(s,S.page,S.pages))return;
+    var el=document.createElement("img");el.className="stamp"+(s.id===S.sel?" sel":"");el.src=s.src;el.alt="Stamp";el.dataset.id=s.id;el.draggable=false;place(el,s);
+    el.addEventListener("pointerdown",function(e){
+      e.preventDefault();e.stopPropagation();select(s.id);
+      try{el.setPointerCapture(e.pointerId)}catch(_){}
+      var r=$("#pagewrap").getBoundingClientRect(),sx=e.clientX,sy=e.clientY,ox=s.x,oy=s.y;
+      function mv(ev){s.x=clamp(ox+(ev.clientX-sx)/r.width,0,1);s.y=clamp(oy+(ev.clientY-sy)/r.height,0,1);place(el,s)}
+      function up(){el.removeEventListener("pointermove",mv);el.removeEventListener("pointerup",up);el.removeEventListener("pointercancel",up)}
+      el.addEventListener("pointermove",mv);el.addEventListener("pointerup",up);el.addEventListener("pointercancel",up);
+    });
+    ov.appendChild(el);
+  });
+}
+$("#pagewrap").addEventListener("pointerdown",function(){select(null)});
+
+/* ---------- stamps ---------- */
+function addStamp(c){
+  if(!S.pdf){status("Open a document first.","err");return}
+  var s={id:"s"+(++uid),src:c.src,ar:c.ar,x:.72,y:.84,w:c.kind==="text"?.3:.2,rot:c.kind==="text"?-6:0,op:1,mode:"page",page:S.page,range:""};
+  S.stamps.push(s);S.sel=s.id;renderOverlay();updateAll();status("Stamp placed. Drag it where you want it.","ok");
+}
+function selStamp(){return S.stamps.find(function(s){return s.id===S.sel})||null}
+function select(id){
+  S.sel=id;
+  document.querySelectorAll(".stamp").forEach(function(e){e.classList.toggle("sel",e.dataset.id===id)});
+  renderInspector();renderList();
+}
+function renderInspector(){
+  var s=selStamp(),box=$("#inspector");box.classList.toggle("hidden",!s);if(!s)return;
+  $("#sw").value=Math.round(s.w*100);$("#swo").textContent=Math.round(s.w*100)+"%";
+  $("#sr").value=s.rot;$("#sro").textContent=s.rot+"°";
+  $("#so").value=Math.round(s.op*100);$("#soo").textContent=Math.round(s.op*100)+"%";
+  $("#smode").value=s.mode;$("#rangefield").classList.toggle("hidden",s.mode!=="custom");$("#srange").value=s.range;
+}
+function modeLabel(s){return s.mode==="page"?"Page "+s.page:s.mode==="all"?"Every page":s.mode==="first"?"First page":s.mode==="last"?"Last page":"Pages "+(s.range||"?")}
+function renderList(){
+  var l=$("#onlist");l.innerHTML="";$("#onempty").classList.toggle("hidden",S.stamps.length>0);
+  S.stamps.forEach(function(s){
+    var d=document.createElement("div");d.className="item"+(s.id===S.sel?" sel":"");d.tabIndex=0;
+    var im=document.createElement("img");im.src=s.src;im.alt="";var sp=document.createElement("span");sp.textContent=modeLabel(s);
+    d.appendChild(im);d.appendChild(sp);
+    function go(){select(s.id);if(s.mode==="page"&&s.page!==S.page){S.page=s.page;renderPage()}}
+    d.addEventListener("click",go);d.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}});
+    l.appendChild(d);
+  });
+}
+function updateAll(){renderInspector();renderList();$("#dl").disabled=!(S.pdf&&S.stamps.length);$("#dl").textContent=S.stamps.length>1?"Save stamped PDF ("+S.stamps.length+" stamps)":"Save stamped PDF"}
+function bindSlider(id,fn){$(id).addEventListener("input",function(){var s=selStamp();if(!s)return;fn(s,+this.value);var el=document.querySelector('.stamp[data-id="'+s.id+'"]');if(el)place(el,s);renderInspector()})}
+bindSlider("#sw",function(s,v){s.w=v/100});bindSlider("#sr",function(s,v){s.rot=v});bindSlider("#so",function(s,v){s.op=v/100});
+$("#smode").addEventListener("change",function(){var s=selStamp();if(!s)return;s.mode=this.value;if(s.mode==="page")s.page=S.page;if(s.mode==="custom"&&!s.range)s.range=String(S.page);renderOverlay();renderInspector();renderList()});
+$("#srange").addEventListener("input",function(){var s=selStamp();if(!s)return;s.range=this.value;renderOverlay();renderList()});
+$("#del").addEventListener("click",function(){S.stamps=S.stamps.filter(function(s){return s.id!==S.sel});S.sel=null;renderOverlay();updateAll()});
+$("#dup").addEventListener("click",function(){var s=selStamp();if(!s)return;var c=Object.assign({},s,{id:"s"+(++uid),x:clamp(s.x-.08,0,1),y:clamp(s.y-.08,0,1)});S.stamps.push(c);S.sel=c.id;renderOverlay();updateAll()});
+document.addEventListener("keydown",function(e){
+  var t=e.target&&e.target.tagName;if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA")return;
+  var s=selStamp();if(!s)return;
+  if(e.key==="Delete"||e.key==="Backspace"){e.preventDefault();$("#del").click();return}
+  var d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(d){e.preventDefault();var st=e.shiftKey?.02:.004;s.x=clamp(s.x+d[0]*st,0,1);s.y=clamp(s.y+d[1]*st,0,1);var el=document.querySelector('.stamp[data-id="'+s.id+'"]');if(el)place(el,s)}
+});
+
+/* ---------- text builder ---------- */
+function textOpts(){return{text:$("#ttext").value.trim(),sub:$("#tsub").value.trim(),date:$("#tdate").checked?$("#tdatev").value.trim():"",color:S.color,worn:$("#tworn").checked}}
+function refreshText(){S.candText=makeTextStamp(textOpts());$("#tprev").src=S.candText.src}
+var sws=$("#swatches");COLORS.forEach(function(c,i){var b=document.createElement("button");b.type="button";b.className="sw";b.style.background=c;b.setAttribute("aria-label","Ink colour "+(i+1));b.setAttribute("aria-pressed",String(c===S.color));
+  b.addEventListener("click",function(){S.color=c;sws.querySelectorAll(".sw").forEach(function(o){o.setAttribute("aria-pressed","false")});b.setAttribute("aria-pressed","true");refreshText()});sws.appendChild(b)});
+var pr=$("#presets");PRESETS.forEach(function(p){var b=document.createElement("button");b.type="button";b.className="chip";b.textContent=p[0];
+  b.addEventListener("click",function(){$("#ttext").value=p[0];S.color=p[1];sws.querySelectorAll(".sw").forEach(function(o,i){o.setAttribute("aria-pressed",String(COLORS[i]===p[1]))});refreshText()});pr.appendChild(b)});
+["#ttext","#tsub","#tdatev"].forEach(function(id){$(id).addEventListener("input",refreshText)});["#tdate","#tworn"].forEach(function(id){$(id).addEventListener("change",refreshText)});
+$("#tdatev").value=todayStr();
+$("#tplace").addEventListener("click",function(){if(!textOpts().text){status("Type the stamp text first.","err");return}addStamp(S.candText)});
+$("#tsave").addEventListener("click",function(){if(!textOpts().text){status("Type the stamp text first.","err");return}saveToLib(S.candText)});
+
+/* ---------- image tab ---------- */
+var srcImg=null;
+function refreshImg(){if(!srcImg)return;S.candImg=imageToCandidate(srcImg,$("#iclean").checked);$("#iprev").src=S.candImg.src;$("#iprev").classList.remove("hidden");$("#iempty").classList.add("hidden");$("#iplace").disabled=false;$("#isave").disabled=false}
+$("#imgin").addEventListener("change",function(){var f=this.files&&this.files[0];if(!f)return;var u=URL.createObjectURL(f),i=new Image();
+  i.onload=function(){srcImg=i;refreshImg()};i.onerror=function(){status("That image could not be read.","err")};i.src=u});
+$("#iclean").addEventListener("change",refreshImg);
+$("#iplace").addEventListener("click",function(){if(S.candImg)addStamp(S.candImg)});
+$("#isave").addEventListener("click",function(){if(S.candImg)saveToLib(S.candImg)});
+
+/* ---------- library: kept on this device, optionally synced to the user's Google Drive ---------- */
+var D={token:null,exp:0,fileId:null,client:null,on:false,pending:null};
+var LIBFILE="stamp-desk-library.json";
+function cfgId(){return (window.STAMPDESK_CONFIG&&window.STAMPDESK_CONFIG.googleClientId)||""}
+function driveReady(){return !!(cfgId()&&window.google&&google.accounts&&google.accounts.oauth2)}
+function getToken(){
+  return new Promise(function(res,rej){
+    if(D.token&&Date.now()<D.exp-30000)return res(D.token);
+    if(!cfgId())return rej(new Error("Google Drive is not set up for this site yet."));
+    if(!driveReady())return rej(new Error("Google sign-in has not loaded. Check your connection and try again."));
+    if(!D.client)D.client=google.accounts.oauth2.initTokenClient({client_id:cfgId(),scope:"https://www.googleapis.com/auth/drive.file",callback:function(){}});
+    D.client.callback=function(r){
+      if(r.error)return rej(new Error(r.error==="access_denied"?"Google Drive access was not allowed.":"Google sign-in failed."));
+      D.token=r.access_token;D.exp=Date.now()+(+r.expires_in||3600)*1000;res(D.token)};
+    D.client.error_callback=function(){rej(new Error("The Google sign-in window was closed."))};
+    D.client.requestAccessToken({prompt:D.on?"":"consent"});
+  });
+}
+async function dFetch(url,opts){
+  var t=await getToken();opts=opts||{};opts.headers=Object.assign({Authorization:"Bearer "+t},opts.headers||{});
+  var r=await fetch(url,opts);if(!r.ok)throw new Error("Google Drive returned an error ("+r.status+").");return r;
+}
+async function driveLoad(){
+  var q=encodeURIComponent("name='"+LIBFILE+"' and trashed=false");
+  var j=await (await dFetch("https://www.googleapis.com/drive/v3/files?q="+q+"&fields=files(id)&spaces=drive")).json();
+  if(!j.files||!j.files.length){D.fileId=null;return[]}
+  D.fileId=j.files[0].id;
+  var list=await (await dFetch("https://www.googleapis.com/drive/v3/files/"+D.fileId+"?alt=media")).json();
+  return Array.isArray(list)?list:[];
+}
+async function driveSave(list){
+  var bd="sd"+Date.now(),meta=D.fileId?{}:{name:LIBFILE,mimeType:"application/json"};
+  var body="--"+bd+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(meta)+"\r\n--"+bd+"\r\nContent-Type: application/json\r\n\r\n"+JSON.stringify(list)+"\r\n--"+bd+"--";
+  var url="https://www.googleapis.com/upload/drive/v3/files"+(D.fileId?"/"+D.fileId:"")+"?uploadType=multipart&fields=id";
+  var j=await (await dFetch(url,{method:D.fileId?"PATCH":"POST",headers:{"Content-Type":"multipart/related; boundary="+bd},body:body})).json();
+  D.fileId=j.id;
+}
+function mergeLib(remote){var seen={},out=[];S.lib.concat(remote||[]).forEach(function(it){if(it&&it.id&&!seen[it.id]){seen[it.id]=1;out.push(it)}});return out.slice(0,30)}
+async function connectDrive(){
+  var remote=await driveLoad();D.on=true;S.lib=mergeLib(remote);store(false,S.lib);renderLib();await driveSave(S.lib);driveUi();
+}
+async function persist(){
+  store(false,S.lib);
+  if(D.on){try{await driveSave(S.lib)}catch(e){status("Saved on this device, but Google Drive did not update: "+e.message,"err");return false}}
+  return true;
+}
+function driveUi(){
+  var line=$("#driveline"),b=$("#driveconnect");
+  if(!cfgId()){line.textContent="Saved on this device only.";b.classList.add("hidden");return}
+  b.classList.remove("hidden");
+  line.textContent=D.on?"Synced with your Google Drive.":"Saved on this device only.";
+  b.textContent=D.on?"Disconnect Google Drive":"Connect Google Drive";
+}
+async function saveToLib(c){
+  var item={id:"l"+Date.now(),src:c.src,ar:c.ar,kind:c.kind};
+  if(!D.on&&cfgId()&&!D.declined){D.pending=item;$("#drivedlg").showModal();return}
+  await commitLib(item);
+}
+async function commitLib(item){
+  S.lib.unshift(item);S.lib=S.lib.slice(0,30);renderLib();
+  var ok=await persist();if(ok)status(D.on?"Saved to your Google Drive.":"Saved on this device.","ok");
+}
+$("#drive-yes").addEventListener("click",async function(){
+  var item=D.pending;D.pending=null;$("#drivedlg").close();
+  try{await connectDrive();await commitLib(item)}catch(e){status(e.message+" The stamp was saved on this device.","err");await commitLib(item)}
+});
+$("#drive-no").addEventListener("click",async function(){var item=D.pending;D.pending=null;D.declined=true;$("#drivedlg").close();await commitLib(item)});
+$("#drive-cancel").addEventListener("click",function(){D.pending=null;$("#drivedlg").close()});
+$("#driveconnect").addEventListener("click",async function(){
+  if(D.on){try{if(D.token&&window.google)google.accounts.oauth2.revoke(D.token)}catch(e){}D.on=false;D.token=null;driveUi();status("Google Drive disconnected. Saved stamps stay on this device.");return}
+  try{await connectDrive();status("Google Drive connected.","ok")}catch(e){status(e.message,"err")}
+});
+function renderLib(){
+  var g=$("#libgrid");g.innerHTML="";$("#libempty").classList.toggle("hidden",S.lib.length>0);
+  S.lib.forEach(function(it){
+    var b=document.createElement("div");b.className="thumb";b.tabIndex=0;b.setAttribute("role","button");b.setAttribute("aria-label","Place saved stamp");
+    var im=document.createElement("img");im.src=it.src;im.alt="";b.appendChild(im);
+    var x=document.createElement("button");x.type="button";x.className="x";x.textContent="\u00d7";x.setAttribute("aria-label","Delete saved stamp");
+    x.addEventListener("click",function(e){e.stopPropagation();S.lib=S.lib.filter(function(o){return o.id!==it.id});persist();renderLib()});
+    b.appendChild(x);b.addEventListener("click",function(){addStamp(it)});b.addEventListener("keydown",function(e){if(e.key==="Enter"){addStamp(it)}});g.appendChild(b);
+  });
+}
+function tab(n){["text","img","lib"].forEach(function(k){$("#p-"+k).classList.toggle("hidden",k!==n);$("#t-"+k).setAttribute("aria-selected",String(k===n))})}
+$("#t-text").addEventListener("click",function(){tab("text")});$("#t-img").addEventListener("click",function(){tab("img")});$("#t-lib").addEventListener("click",function(){tab("lib")});
+
+/* ---------- export ---------- */
+async function buildPdf(){
+  var L=PDFLib,doc=await L.PDFDocument.load(S.bytes,{ignoreEncryption:true}),pages=doc.getPages(),cache=new Map(),total=pages.length;
+  for(var si=0;si<S.stamps.length;si++){
+    var s=S.stamps[si];
+    if(!cache.has(s.src))cache.set(s.src,await doc.embedPng(dataToBytes(s.src)));
+    var img=cache.get(s.src);
+    for(var n=1;n<=total;n++){
+      if(!applies(s,n,total))continue;
+      var pg=pages[n-1],rot=((pg.getRotation().angle%360)+360)%360,cb=pg.getCropBox(),W=cb.width,H=cb.height,Wd=rot%180?H:W,Hd=rot%180?W:H;
+      var px=s.x*Wd,py=s.y*Hd,x,y;
+      if(rot===0){x=px;y=H-py}else if(rot===90){x=py;y=px}else if(rot===180){x=W-px;y=py}else{x=W-py;y=H-px}
+      var w=s.w*Wd,h=w/s.ar,deg=rot-s.rot,th=deg*Math.PI/180,cx=x+cb.x,cy=y+cb.y;
+      pg.drawImage(img,{x:cx-(w/2*Math.cos(th)-h/2*Math.sin(th)),y:cy-(w/2*Math.sin(th)+h/2*Math.cos(th)),width:w,height:h,rotate:L.degrees(deg),opacity:s.op});
+    }
+  }
+  return doc.save();
+}
+$("#dl").addEventListener("click",async function(){
+  if(!S.pdf||!S.stamps.length)return;
+  var btn=this;btn.disabled=true;status("Building the stamped PDF...");
+  try{
+    var out=await buildPdf();
+    var name=(S.name||"document").replace(/\.[^.]+$/,"")+"-stamped.pdf";
+    var url=URL.createObjectURL(new Blob([out],{type:"application/pdf"})),a=document.createElement("a");
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url)},5000);
+    status("Saved "+name+" to your downloads.","ok");
+  }catch(e){
+    status((e&&e.message)||"The stamped PDF could not be saved.","err");
+  }finally{updateAll()}
+});
+
+/* ---------- wiring ---------- */
+$("#openbtn").addEventListener("click",function(){$("#filein").click()});
+$("#filein").addEventListener("change",function(){loadFile(this.files&&this.files[0]);this.value=""});
+$("#prev").addEventListener("click",function(){if(S.page>1){S.page--;renderPage()}});
+$("#next").addEventListener("click",function(){if(S.page<S.pages){S.page++;renderPage()}});
+$("#pageno").addEventListener("change",function(){var v=clamp(parseInt(this.value,10)||1,1,S.pages||1);S.page=v;renderPage()});
+var st=$("#stage");
+["dragenter","dragover"].forEach(function(ev){st.addEventListener(ev,function(e){e.preventDefault();st.classList.add("over")})});
+["dragleave","drop"].forEach(function(ev){st.addEventListener(ev,function(e){e.preventDefault();st.classList.remove("over")})});
+st.addEventListener("drop",function(e){var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)loadFile(f)});
+var rt;window.addEventListener("resize",function(){clearTimeout(rt);rt=setTimeout(function(){renderPage()},150)});
+
+async function boot(){
+  S.lib=store(true);renderLib();driveUi();refreshText();
+  if(!window.PDFLib||!window.pdfjsLib){status("The PDF tools could not load. Check your connection and reload.","err");return}
+  var sample=await makeSample();await openBytes(sample,"Delivery-note-sample.pdf",true);
+  addStamp(S.candText);status("Sample loaded. Drop your own PDF or photo here to replace it.");
+}
+boot().catch(function(e){status((e&&e.message)||"Something went wrong while starting.","err")});
+})();
+</script>
+</body>
+</html>
